@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master, main]
+
+permissions:
+  contents: read
+
+jobs:
+  commitlint:
+    name: Conventional Commits
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: wagoid/commitlint-github-action@v6
+
+  secret-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: gitleaks/gitleaks-action@v2
+
+  actions-lint:
+    name: Lint our own workflows (zizmor + actionlint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v3
+      - run: uvx zizmor --min-severity medium .github/workflows/
+      - uses: raven-actions/actionlint@v2
+
+  lint:
+    name: Lint (ruff + codespell)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v3
+      - run: uvx ruff check .
+      - run: uvx ruff format --check .
+      - run: uvx codespell
+
+  typecheck:
+    name: Typecheck (pyright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v3
+      - run: uv venv --python 3.13 .venv
+      - run: uv pip install --python .venv/bin/python -r requirements-dev.txt
+      - run: uvx pyright
+
+  test:
+    name: Test (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v3
+      - run: uv venv --python 3.13 .venv
+      - run: uv pip install --python .venv/bin/python -r requirements-dev.txt
+      - run: .venv/bin/python -m pytest
+
+  audit:
+    name: Dependency audit (pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v3
+      - run: uvx pip-audit -r requirements.txt
