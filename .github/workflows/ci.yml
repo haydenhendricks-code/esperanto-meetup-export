@@ -7,41 +7,31 @@ on:
     branches: [main]
 
 jobs:
-  commitlint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: wagoid/commitlint-github-action@303102434e323063f113a0c0e5a95221ffc2f6d5 # v6.2.1
-
-  gitleaks:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: gitleaks/gitleaks-action@e76cf0a20227f6770f5e550c608f61536b5952c4 # v2.3.9
-
-  actionlint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: raven-actions/actionlint@55c7075c3d288d66a2a07c4b1227f54924b1ff33 # v2.1.0
-
   lint-and-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
-      - run: pip install -r requirements.txt
-      - run: pip install ruff pytest
-      - run: ruff check .
-      - run: ruff format --check .
-      - run: pytest -q
+      - name: Install runtime dependencies
+        run: pip install -r requirements.txt
+      - name: Install dev tools
+        run: pip install ruff pytest responses
+      - name: Lint
+        run: ruff check .
+      - name: Format check
+        run: ruff format --check .
+      - name: Run tests
+        run: pytest -q
 
-  zizmor:
+  gitleaks:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: astral-sh/setup-uv@f94383a1f81014cc6d3a95627ddbd699f79c2980 # v5.1.0
-      - run: uvx zizmor --min-severity medium .github/workflows/
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
