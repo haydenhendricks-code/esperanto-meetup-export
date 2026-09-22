@@ -27,6 +27,7 @@ import datetime as dt
 import os
 import re
 import threading
+import urllib.request
 from collections.abc import Mapping, Sequence
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -48,6 +49,13 @@ EVENT_SOURCE = os.environ.get("MEETUP_EVENT_SOURCE", "graphql").strip().lower()
 # Explicit group slugs. Required for the "ics" source; with "graphql" it just
 # overrides membership auto-discovery.
 GROUP_SLUGS = parse_slugs(os.environ.get("MEETUP_GROUP_SLUGS"))
+
+# External ICS URLs (e.g. Chicago, Portland feeds) passed as a comma-separated list.
+EXTRA_ICS_URLS = [
+    url.strip()
+    for url in os.environ.get("EXTRA_ICS_URLS", "").split(",")
+    if url.strip()
+]
 
 DEBUG = os.environ.get("DEBUG", "").lower() in {"1", "true", "yes", "on"}
 # How long a rendered feed is served before we go back to Meetup. Assumes both
@@ -258,31 +266,79 @@ def build_feed_via_graphql() -> bytes:
         ),
     )
     app.logger.info("fetched %d upcoming event(s)", len(events))
-    return ical_convert(events)
 
+    vevents = []
+    for e in events:
+        try:
+            vevents.append(convert_event_obj_to_ical(e))
+        except (ValueError, TypeError) as exc:
+            app.logger.warning("skipping unconvertible event %r: %s", e.get("id"), exc)
+
+    vtimezones = []
+    if EXTRA_ICS_URLS:
+        extra_events, extra_tzs = fetch_external_ics_events(EXTRA_ICS_URLS)
+        vevents.extend(extra_events)
+        vtimezones.extend(extra_tzs)
+
+    return render_calendar(vevents, timezones=vtimezones)
+
+def fetch_external_ics_events(urls: Sequence[str]) -> tuple[list[icalendar.Event], list[icalendar.Timezone]]:
+    """Fetch external .ics URLs and extract VEVENT and VTIMEZONE components."""
+    vevents = []
+    vtimezones = []
+    
+    # Modern Chrome User-Agent string to prevent site blocking
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+
+    for url in urls:
+        try:
+            req = urllib.request.Request(url, headers=headers)
+            # Reduced timeout from 10s to 5s so slow external requests don't block Render
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                caldata = resp.read()
+            
+            cal = icalendar.Calendar.from_ical(caldata)
+            for component in cal.walk():
+                if component.name == "VEVENT":
+                    vevents.append(component)
+                elif component.name == "VTIMEZONE":
+                    vtimezones.append(component)
+            app.logger.info("Fetched external ICS feed from %s", url)
+        except Exception as exc:
+            app.logger.warning("Failed to fetch extra ICS feed %s: %s", url, exc)
+
+    return vevents, vtimezones
 
 def build_feed_via_ics() -> bytes:
-    """Meetup's public per-group ICS export: no auth, no membership discovery."""
-    if not GROUP_SLUGS:
-        raise MeetupICSError(
-            "MEETUP_EVENT_SOURCE=ics needs MEETUP_GROUP_SLUGS — the public ICS "
-            "export is per group and cannot discover which groups you belong to. "
-            "Set MEETUP_GROUP_SLUGS=slug1,slug2 (the bit after meetup.com/ in a "
-            "group's URL), or use MEETUP_EVENT_SOURCE=graphql."
+    """Meetup's public per-group ICS export + external ICS feeds."""
+    events = []
+    timezones = []
+
+    # 1. Fetch Meetup group events (if slugs are provided)
+    if GROUP_SLUGS:
+        slugs = GROUP_SLUGS[:1] if DEBUG else GROUP_SLUGS
+        events, timezones = fetch_events_via_ics(
+            slugs,
+            on_error=lambda slug, exc: app.logger.warning(
+                "skipping group %s: %s", slug, exc
+            ),
+        )
+        app.logger.info(
+            "fetched %d upcoming event(s) from %d group(s)", len(events), len(slugs)
         )
 
-    slugs = GROUP_SLUGS[:1] if DEBUG else GROUP_SLUGS
-    events, timezones = fetch_events_via_ics(
-        slugs,
-        on_error=lambda slug, exc: app.logger.warning(
-            "skipping group %s: %s", slug, exc
-        ),
-    )
-    app.logger.info(
-        "fetched %d upcoming event(s) from %d group(s)", len(events), len(slugs)
-    )
-    return render_calendar(events, timezones=timezones)
+    # 2. Fetch external ICS feed events (e.g. esperanto-chicago.org)
+    if EXTRA_ICS_URLS:
+        extra_events, extra_tzs = fetch_external_ics_events(EXTRA_ICS_URLS)
+        events.extend(extra_events)
+        timezones.extend(extra_tzs)
 
+    if not events:
+        app.logger.warning("No events found across Meetup or extra ICS sources.")
+
+    return render_calendar(events, timezones=timezones)
 
 def build_feed() -> bytes:
     if EVENT_SOURCE == "ics":
