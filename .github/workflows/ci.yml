@@ -10,40 +10,40 @@ jobs:
   commitlint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - uses: wagoid/commitlint-github-action@b948410070731217e44e2ef30248e3cf286b24bb
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: wagoid/commitlint-github-action@303102434e323063f113a0c0e5a95221ffc2f6d5 # v6.2.1
 
   gitleaks:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - uses: gitleaks/gitleaks-action@83a71b2d354b52ff37c89b4f98126b8e39818817
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: gitleaks/gitleaks-action@e76cf0a20227f6770f5e550c608f61536b5952c4 # v2.3.9
 
   actionlint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - uses: astral-sh/setup-uv@b295982e5b4bfef3343477174dbbc2467d1d2348
-      - uses: raven-actions/actionlint@18a4a584347be735be26e82a6e9ee577134375cb
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: astral-sh/setup-uv@f94383a1f81014cc6d3a95627ddbd699f79c2980 # v5.1.0
+      - uses: raven-actions/actionlint@55c7075c3d288d66a2a07c4b1227f54924b1ff33 # v2.1.0
 
   ruff:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - uses: astral-sh/setup-uv@b295982e5b4bfef3343477174dbbc2467d1d2348
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: astral-sh/setup-uv@f94383a1f81014cc6d3a95627ddbd699f79c2980 # v5.1.0
       - run: uv run ruff check .
       - run: uv run ruff format --check .
 
   pytest:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - uses: astral-sh/setup-uv@b295982e5b4bfef3343477174dbbc2467d1d2348
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: astral-sh/setup-uv@f94383a1f81014cc6d3a95627ddbd699f79c2980 # v5.1.0
       - run: uv run pytest
 
   zizmor:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - uses: astral-sh/setup-uv@b295982e5b4bfef3343477174dbbc2467d1d2348
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: astral-sh/setup-uv@f94383a1f81014cc6d3a95627ddbd699f79c2980 # v5.1.0
       - run: uvx zizmor --min-severity medium .github/workflows/
