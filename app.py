@@ -282,11 +282,14 @@ def build_feed_via_graphql() -> bytes:
 
     return render_calendar(vevents, timezones=vtimezones)
 
-def fetch_external_ics_events(urls: Sequence[str]) -> tuple[list[icalendar.Event], list[icalendar.Timezone]]:
+
+def fetch_external_ics_events(
+    urls: Sequence[str],
+) -> tuple[list[icalendar.Event], list[icalendar.Timezone]]:
     """Fetch external .ics URLs and extract VEVENT and VTIMEZONE components."""
     vevents = []
     vtimezones = []
-    
+
     # Modern Chrome User-Agent string to prevent site blocking
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -298,7 +301,7 @@ def fetch_external_ics_events(urls: Sequence[str]) -> tuple[list[icalendar.Event
             # Reduced timeout from 10s to 5s so slow external requests don't block Render
             with urllib.request.urlopen(req, timeout=5) as resp:
                 caldata = resp.read()
-            
+
             cal = icalendar.Calendar.from_ical(caldata)
             for component in cal.walk():
                 if component.name == "VEVENT":
@@ -306,13 +309,19 @@ def fetch_external_ics_events(urls: Sequence[str]) -> tuple[list[icalendar.Event
                 elif component.name == "VTIMEZONE":
                     vtimezones.append(component)
             app.logger.info("Fetched external ICS feed from %s", url)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             app.logger.warning("Failed to fetch extra ICS feed %s: %s", url, exc)
 
     return vevents, vtimezones
 
+
 def build_feed_via_ics() -> bytes:
     """Meetup's public per-group ICS export + external ICS feeds."""
+    if not GROUP_SLUGS and not EXTRA_ICS_URLS:
+        raise MeetupICSError(
+            "MEETUP_EVENT_SOURCE is set to 'ics' but no group slugs were configured in MEETUP_GROUP_SLUGS."
+        )
+
     events = []
     timezones = []
 
@@ -339,6 +348,7 @@ def build_feed_via_ics() -> bytes:
         app.logger.warning("No events found across Meetup or extra ICS sources.")
 
     return render_calendar(events, timezones=timezones)
+
 
 def build_feed() -> bytes:
     if EVENT_SOURCE == "ics":
